@@ -1,0 +1,206 @@
+{
+  "openapi": "3.0.0",
+  "info": { "title": "Test API", "version": "1.0.0" },
+  "paths": {
+    "/api/v1/status": {
+      "get": {
+        "summary": "Get status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StatusResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/widgets": {
+      "get": {
+        "summary": "List widgets",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/WidgetList" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create widget",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/WidgetRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/WidgetResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/widgets/{id}": {
+      "delete": {
+        "summary": "Delete widget",
+        "responses": {
+          "204": {
+            "description": "Widget deleted"
+          }
+        }
+      }
+    },
+    "/api/v1/jobs": {
+      "post": {
+        "summary": "Create job",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/JobRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/JobResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/items": {
+      "get": {
+        "summary": "List items",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ItemList" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "StatusResponse": {
+        "description": "Service health status",
+        "type": "object",
+        "properties": {
+          "status": { "type": "string" },
+          "version": { "type": "string" }
+        }
+      },
+      "WidgetRequest": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "color": { "type": "string" }
+        }
+      },
+      "WidgetResponse": {
+        "description": "A created widget",
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "color": { "type": "string" },
+          "owner": { "$ref": "#/components/schemas/User" },
+          "audit": {
+            "allOf": [{ "$ref": "#/components/schemas/AuditMetadata" }]
+          },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "metadata": {
+            "anyOf": [{ "$ref": "#/components/schemas/Metadata" }],
+            "nullable": true
+          }
+        }
+      },
+      "WidgetList": {
+        "description": "A list of widgets",
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WidgetResponse" }
+          },
+          "total": { "type": "integer" }
+        }
+      },
+      "User": {
+        "description": "A widget owner",
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "email": { "type": "string" }
+        }
+      },
+      "AuditMetadata": {
+        "description": "Audit metadata",
+        "type": "object",
+        "properties": {
+          "created_by": { "type": "string" },
+          "request_id": { "type": "string" }
+        }
+      },
+      "JobRequest": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" }
+        }
+      },
+      "JobResponse": {
+        "description": "A created job",
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "state": { "type": "string" }
+        }
+      },
+      "Metadata": {
+        "description": "Timestamps",
+        "type": "object",
+        "properties": {
+          "created_at": { "type": "string" },
+          "updated_at": { "type": "string" }
+        }
+      },
+      "Item": {
+        "description": "A single item",
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "label": { "type": "string" }
+        }
+      },
+      "ItemList": {
+        "description": "A list of items",
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Item" }
+          },
+          "total": { "type": "integer" }
+        }
+      }
+    }
+  }
+}
