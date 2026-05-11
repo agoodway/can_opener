@@ -245,6 +245,8 @@ defmodule CanOpenerTest do
         {:ok, %Req.Response{status: 204, body: nil}}
       end)
 
+      # Function name contains special chars, so apply is required here.
+      # credo:disable-for-next-line Credo.Check.Refactor.Apply
       assert {:ok, nil} = apply(FixtureApi, :"widgets_{id}", [client])
     end
 

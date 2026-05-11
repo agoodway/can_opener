@@ -56,7 +56,8 @@ defmodule CanOpener.MixProject do
       # Code Quality (dev/test only)
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_dna, github: "dannote/ex_dna", branch: "master", only: [:dev, :test], runtime: false},
-      {:ex_slop, github: "dannote/ex_slop", branch: "master", only: [:dev, :test], runtime: false},
+      {:ex_slop,
+       github: "dannote/ex_slop", branch: "master", only: [:dev, :test], runtime: false},
       {:doctor, "~> 0.21", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
     ]

@@ -36,6 +36,7 @@ defmodule CanOpener do
       and replacing `/` with `_`
   """
 
+  @doc false
   defmacro __using__(opts) do
     spec = Keyword.fetch!(opts, :spec)
     otp_app = Keyword.fetch!(opts, :otp_app)
@@ -65,6 +66,7 @@ defmodule CanOpener do
     end
   end
 
+  @doc false
   defmacro __before_compile__(env) do
     spec = Module.get_attribute(env.module, :_co_spec)
     path_prefix = Module.get_attribute(env.module, :_co_path_prefix)
@@ -72,56 +74,61 @@ defmodule CanOpener do
 
     for {path, methods} <- spec["paths"] || %{},
         {method, operation} <- methods do
-      func_name = CanOpener.Naming.from_path(path, path_prefix)
-      http_method = String.to_atom(method)
-      summary = operation["summary"] || ""
-      description = operation["description"] || ""
+      generate_operation(path, method, operation, path_prefix, schemas_mod)
+    end
+  end
 
-      response_module =
-        case get_in(operation, [
-               "responses",
-               "200",
-               "content",
-               "application/json",
-               "schema",
-               "$ref"
-             ]) do
-          nil -> nil
-          ref -> Module.concat(schemas_mod, ref |> String.split("/") |> List.last())
+  defp generate_operation(path, method, operation, path_prefix, schemas_mod) do
+    func_name = CanOpener.Naming.from_path(path, path_prefix)
+    http_method = String.to_atom(method)
+    doc = operation_doc(operation)
+    response_module = response_module_for(operation, schemas_mod)
+
+    if operation["requestBody"] do
+      generate_body_operation(func_name, http_method, path, doc, response_module)
+    else
+      generate_simple_operation(func_name, http_method, path, doc, response_module)
+    end
+  end
+
+  defp operation_doc(operation) do
+    summary = operation["summary"] || ""
+    description = operation["description"] || ""
+    "#{summary}\n\n#{description}"
+  end
+
+  defp response_module_for(operation, schemas_mod) do
+    case get_in(operation, ["responses", "200", "content", "application/json", "schema", "$ref"]) do
+      nil -> nil
+      ref -> Module.concat(schemas_mod, ref |> String.split("/") |> List.last())
+    end
+  end
+
+  defp generate_body_operation(func_name, http_method, path, doc, response_module) do
+    quote do
+      @doc unquote(doc)
+      def unquote(func_name)(%CanOpener.Client{} = client, params) when is_map(params) do
+        case CanOpener.Client.request(client, unquote(http_method), unquote(path), json: params) do
+          {:ok, body} when is_map(body) ->
+            {:ok, CanOpener.decode_response(unquote(response_module), body)}
+
+          other ->
+            other
         end
+      end
+    end
+  end
 
-      has_body = operation["requestBody"] != nil
+  defp generate_simple_operation(func_name, http_method, path, doc, response_module) do
+    quote do
+      @doc unquote(doc)
+      def unquote(func_name)(%CanOpener.Client{} = client) do
+        case CanOpener.Client.request(client, unquote(http_method), unquote(path)) do
+          {:ok, body} when is_map(body) ->
+            {:ok, CanOpener.decode_response(unquote(response_module), body)}
 
-      if has_body do
-        quote do
-          @doc unquote("#{summary}\n\n#{description}")
-          def unquote(func_name)(%CanOpener.Client{} = client, params) when is_map(params) do
-            case CanOpener.Client.request(
-                   client,
-                   unquote(http_method),
-                   unquote(path),
-                   json: params
-                 ) do
-              {:ok, body} when is_map(body) ->
-                {:ok, CanOpener.decode_response(unquote(response_module), body)}
-
-              error ->
-                error
-            end
-          end
-        end
-      else
-        quote do
-          @doc unquote("#{summary}\n\n#{description}")
-          def unquote(func_name)(%CanOpener.Client{} = client) do
-            case CanOpener.Client.request(client, unquote(http_method), unquote(path)) do
-              {:ok, body} when is_map(body) ->
-                {:ok, CanOpener.decode_response(unquote(response_module), body)}
-
-              error ->
-                error
-            end
-          end
+          other ->
+            other
         end
       end
     end

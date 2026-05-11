@@ -1,4 +1,5 @@
 defmodule FixtureApi do
+  @moduledoc false
   use CanOpener,
     spec: "test/support/openapi.json",
     otp_app: :can_opener,
@@ -8,6 +9,7 @@ defmodule FixtureApi do
 end
 
 defmodule FixtureHeaderAuthApi do
+  @moduledoc false
   use CanOpener,
     spec: "test/support/openapi.json",
     otp_app: :can_opener,
@@ -17,6 +19,7 @@ defmodule FixtureHeaderAuthApi do
 end
 
 defmodule FixtureNoAuthApi do
+  @moduledoc false
   use CanOpener,
     spec: "test/support/openapi.json",
     otp_app: :can_opener,

@@ -23,86 +23,95 @@ defmodule CanOpener.Schema do
     desc = schema_def["description"] || ""
 
     field_names = props |> Map.keys() |> Enum.sort() |> Enum.map(&String.to_atom/1)
-    conversions = build_conversions(props)
-    escaped_conversions = Macro.escape(conversions)
+    escaped_conversions = props |> build_conversions() |> Macro.escape()
 
-    Module.create(
-      mod_name,
-      quote do
-        @moduledoc unquote(desc)
+    Module.create(mod_name, schema_body(field_names, desc, escaped_conversions, schemas_mod), env)
+  end
 
-        defstruct unquote(field_names)
+  defp schema_body(field_names, desc, escaped_conversions, schemas_mod) do
+    List.wrap(struct_and_from_map(field_names, desc)) ++
+      List.wrap(field_conversion(escaped_conversions, schemas_mod))
+  end
 
-        @field_set MapSet.new(unquote(field_names))
-        @conversions unquote(escaped_conversions)
-        @schemas_mod unquote(schemas_mod)
+  defp struct_and_from_map(field_names, desc) do
+    quote do
+      @moduledoc unquote(desc)
 
-        @doc "Convert a JSON-decoded map into a `#{inspect(__MODULE__)}` struct."
-        def from_map(nil), do: nil
+      defstruct unquote(field_names)
 
-        def from_map(map) when is_map(map) do
-          fields =
-            for {key, value} <- map,
-                atom_key = to_field_atom(key),
-                atom_key in @field_set,
-                into: %{} do
-              {atom_key, convert_field(atom_key, value)}
-            end
+      @field_set MapSet.new(unquote(field_names))
 
-          struct(__MODULE__, fields)
-        end
+      @doc "Convert a JSON-decoded map into a `#{inspect(__MODULE__)}` struct."
+      def from_map(nil), do: nil
 
-        defp to_field_atom(key) when is_atom(key), do: key
-        defp to_field_atom(key) when is_binary(key), do: String.to_atom(key)
-
-        defp convert_field(_key, nil), do: nil
-
-        defp convert_field(key, value) do
-          case Map.get(@conversions, key) do
-            {:struct, ref_name} when is_map(value) ->
-              Module.concat(@schemas_mod, ref_name).from_map(value)
-
-            {:list, ref_name} when is_list(value) ->
-              mod = Module.concat(@schemas_mod, ref_name)
-              Enum.map(value, &mod.from_map/1)
-
-            _ ->
-              value
+      def from_map(map) when is_map(map) do
+        fields =
+          for {key, value} <- map,
+              atom_key = to_field_atom(key),
+              atom_key in @field_set,
+              into: %{} do
+            {atom_key, convert_field(atom_key, value)}
           end
+
+        struct(__MODULE__, fields)
+      end
+
+      defp to_field_atom(key) when is_atom(key), do: key
+      defp to_field_atom(key) when is_binary(key), do: String.to_atom(key)
+    end
+  end
+
+  defp field_conversion(escaped_conversions, schemas_mod) do
+    quote do
+      @conversions unquote(escaped_conversions)
+      @schemas_mod unquote(schemas_mod)
+
+      defp convert_field(_key, nil), do: nil
+
+      defp convert_field(key, value) do
+        case Map.get(@conversions, key) do
+          {:struct, ref_name} when is_map(value) ->
+            Module.concat(@schemas_mod, ref_name).from_map(value)
+
+          {:list, ref_name} when is_list(value) ->
+            mod = Module.concat(@schemas_mod, ref_name)
+            Enum.map(value, &mod.from_map/1)
+
+          _ ->
+            value
         end
-      end,
-      env
-    )
+      end
+    end
   end
 
   defp build_conversions(props) do
-    for {prop_name, prop_def} <- props, into: %{} do
-      conv =
-        cond do
-          match?(%{"$ref" => _}, prop_def) ->
-            {:struct, prop_def["$ref"] |> String.split("/") |> List.last()}
+    Map.new(props, fn {prop_name, prop_def} ->
+      {String.to_atom(prop_name), convert_prop(prop_def)}
+    end)
+  end
 
-          is_list(prop_def["anyOf"]) ->
-            case Enum.find(prop_def["anyOf"], &match?(%{"$ref" => _}, &1)) do
-              %{"$ref" => ref} -> {:struct, ref |> String.split("/") |> List.last()}
-              _ -> :passthrough
-            end
+  defp convert_prop(%{"$ref" => ref}), do: {:struct, ref_name(ref)}
 
-          is_list(prop_def["allOf"]) ->
-            case Enum.find(prop_def["allOf"], &match?(%{"$ref" => _}, &1)) do
-              %{"$ref" => ref} -> {:struct, ref |> String.split("/") |> List.last()}
-              _ -> :passthrough
-            end
+  defp convert_prop(%{"anyOf" => variants}) when is_list(variants) do
+    find_ref_in(variants)
+  end
 
-          prop_def["type"] == "array" && is_map(prop_def["items"]) &&
-              Map.has_key?(prop_def["items"], "$ref") ->
-            {:list, prop_def["items"]["$ref"] |> String.split("/") |> List.last()}
+  defp convert_prop(%{"allOf" => variants}) when is_list(variants) do
+    find_ref_in(variants)
+  end
 
-          true ->
-            :passthrough
-        end
+  defp convert_prop(%{"type" => "array", "items" => %{"$ref" => ref}}) do
+    {:list, ref_name(ref)}
+  end
 
-      {String.to_atom(prop_name), conv}
+  defp convert_prop(_), do: :passthrough
+
+  defp find_ref_in(variants) do
+    case Enum.find(variants, &match?(%{"$ref" => _}, &1)) do
+      %{"$ref" => ref} -> {:struct, ref_name(ref)}
+      _ -> :passthrough
     end
   end
+
+  defp ref_name(ref), do: ref |> String.split("/") |> List.last()
 end

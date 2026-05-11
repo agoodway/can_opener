@@ -1,7 +1,9 @@
 %Doctor.Config{
   ignore_modules: [
     ~r/.*Test$/,
-    ~r/.*Fixtures$/
+    ~r/.*Fixtures$/,
+    ~r/^CanOpener$/,
+    ~r/^CanOpener\.Schema$/
   ],
   ignore_paths: [
     "test/",

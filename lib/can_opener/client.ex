@@ -15,7 +15,11 @@ defmodule CanOpener.Client do
 
   defstruct [:base_url, :auth, req_options: []]
 
-  @doc false
+  @doc """
+  Build a new client struct from OTP app config and explicit options.
+
+  Called by the generated `client/1` function — not intended for direct use.
+  """
   def new(otp_app, default_base_url, auth_strategy, opts) do
     base_url =
       Keyword.get(opts, :base_url) ||
@@ -39,7 +43,11 @@ defmodule CanOpener.Client do
   defp build_auth({:header, header_name}, key), do: {:header, header_name, key}
   defp build_auth(:none, _key), do: nil
 
-  @doc false
+  @doc """
+  Execute an HTTP request against the API.
+
+  Called by generated operation functions — not intended for direct use.
+  """
   def request(%__MODULE__{} = client, method, path, opts \\ []) do
     headers = auth_headers(client.auth)
 
