@@ -67,7 +67,7 @@ Create a client and call generated functions:
 ```elixir
 client = MyApp.ExampleApi.client(api_key: "sk_test_123")
 
-{:ok, status} = MyApp.ExampleApi.status(client)
+{:ok, status} = MyApp.ExampleApi.get_status(client)
 status.status
 #=> "ok"
 ```
@@ -78,7 +78,7 @@ For operations with a request body, pass a map as the second argument:
 client = MyApp.ExampleApi.client(api_key: "sk_test_123")
 
 {:ok, widget} =
-  MyApp.ExampleApi.widgets(client, %{
+  MyApp.ExampleApi.post_widgets(client, %{
     name: "Gear",
     color: "blue"
   })
@@ -114,36 +114,52 @@ The spec is read at compile time. When the OpenAPI file changes, the module reco
 
 ## Generated Function Names
 
-CanOpener generates function names from OpenAPI paths by:
+CanOpener generates function names from `operationId` when present. If an operation
+does not have an `operationId`, CanOpener falls back to a method-prefixed path name by:
 
 - Removing the configured `path_prefix`
-- Replacing `/` with `_`
+- Replacing path parameters like `{id}` with regular identifier parts like `id`
+- Replacing non-identifier separators with `_`
 - Converting the result to an atom
 
 For example, with `path_prefix: "/api/v1/"`:
 
-| OpenAPI path | Generated function |
+| OpenAPI operation | Generated function |
 | --- | --- |
-| `/api/v1/status` | `status/1` |
-| `/api/v1/widgets` without request body | `widgets/1` |
-| `/api/v1/widgets` with request body | `widgets/2` |
-| `/api/v1/verify/email` | `verify_email/1` |
-| `/api/v1/widgets/{id}` | `widgets_{id}/1` |
+| `GET /api/v1/status` | `get_status/1` |
+| `GET /api/v1/widgets` | `get_widgets/1` |
+| `POST /api/v1/widgets` with request body | `post_widgets/2` |
+| `GET /api/v1/verify/email` | `get_verify_email/1` |
+| `GET /api/v1/issues/{id}` | `get_issue/2` |
+| `DELETE /api/v1/issues/{id}` | `delete_issue/2` |
 
-CanOpener does not currently substitute path parameters. A path like `/widgets/{id}` is sent literally as `/widgets/{id}`.
+Path parameters are passed as function arguments after the client and are URI-encoded
+before CanOpener sends the request.
 
 ## Generated Operation Arity
 
 Operations without `requestBody` generate a one-argument function:
 
 ```elixir
-MyApp.ExampleApi.status(client)
+MyApp.ExampleApi.get_status(client)
 ```
 
 Operations with `requestBody` generate a two-argument function:
 
 ```elixir
-MyApp.ExampleApi.widgets(client, %{name: "Gear"})
+MyApp.ExampleApi.post_widgets(client, %{name: "Gear"})
+```
+
+Operations with path parameters include those parameters after the client:
+
+```elixir
+MyApp.ExampleApi.get_issue(client, 42)
+```
+
+For operations with both path parameters and a request body, the request body is last:
+
+```elixir
+MyApp.ExampleApi.post_issue_archive(client, 42, %{reason: "duplicate"})
 ```
 
 The request body argument must be a map. It is sent to `Req` as `json: params`.
@@ -506,7 +522,7 @@ defmodule MyApp.ExampleApiTest do
     end)
 
     assert {:ok, %MyApp.ExampleApi.Schemas.StatusResponse{status: "ok"}} =
-             MyApp.ExampleApi.status(client)
+             MyApp.ExampleApi.get_status(client)
   end
 end
 ```

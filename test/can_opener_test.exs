@@ -150,12 +150,13 @@ defmodule CanOpenerTest do
   describe "generated operations" do
     test "all expected functions exist" do
       Code.ensure_loaded!(FixtureApi)
-      assert function_exported?(FixtureApi, :status, 1)
-      assert function_exported?(FixtureApi, :widgets, 1)
-      assert function_exported?(FixtureApi, :widgets, 2)
-      assert function_exported?(FixtureApi, :items, 1)
-      assert function_exported?(FixtureApi, :jobs, 2)
-      assert function_exported?(FixtureApi, :"widgets_{id}", 1)
+      assert function_exported?(FixtureApi, :get_status, 1)
+      assert function_exported?(FixtureApi, :get_widgets, 1)
+      assert function_exported?(FixtureApi, :post_widgets, 2)
+      assert function_exported?(FixtureApi, :get_items, 1)
+      assert function_exported?(FixtureApi, :post_jobs, 2)
+      assert function_exported?(FixtureApi, :get_widget, 2)
+      assert function_exported?(FixtureApi, :delete_widget, 2)
     end
 
     test "GET request without body" do
@@ -170,7 +171,7 @@ defmodule CanOpenerTest do
       end)
 
       assert {:ok, %Schemas.StatusResponse{status: "ok", version: "2.0"}} =
-               FixtureApi.status(client)
+               FixtureApi.get_status(client)
     end
 
     test "POST request with body" do
@@ -193,7 +194,7 @@ defmodule CanOpenerTest do
          }}
       end)
 
-      assert {:ok, result} = FixtureApi.widgets(client, %{name: "Gear", color: "blue"})
+      assert {:ok, result} = FixtureApi.post_widgets(client, %{name: "Gear", color: "blue"})
       assert %Schemas.WidgetResponse{id: 42, name: "Gear"} = result
       assert %Schemas.Metadata{created_at: "2025-06-01"} = result.metadata
     end
@@ -216,7 +217,7 @@ defmodule CanOpenerTest do
       end)
 
       assert {:ok, %Schemas.WidgetList{total: 1, items: [%Schemas.WidgetResponse{id: 42}]}} =
-               FixtureApi.widgets(client)
+               FixtureApi.get_widgets(client)
     end
 
     test "201 response with non-200 schema currently returns raw map" do
@@ -232,7 +233,25 @@ defmodule CanOpenerTest do
 
       # The generator only decodes schemas declared under responses["200"] today.
       assert {:ok, %{"id" => 9, "state" => "queued"}} =
-               FixtureApi.jobs(client, %{name: "Import"})
+               FixtureApi.post_jobs(client, %{name: "Import"})
+    end
+
+    test "path parameters are substituted and encoded" do
+      client = FixtureApi.client(api_key: "sk_test")
+
+      expect(Req, :request, fn opts ->
+        assert opts[:method] == :get
+        assert opts[:url] == "https://api.fixture.test/api/v1/widgets/id%20with%2Fslash"
+
+        {:ok,
+         %Req.Response{
+           status: 200,
+           body: %{"id" => 42, "name" => "Gear", "color" => "blue"}
+         }}
+      end)
+
+      assert {:ok, %Schemas.WidgetResponse{id: 42, name: "Gear"}} =
+               FixtureApi.get_widget(client, "id with/slash")
     end
 
     test "204 response without schema returns raw body" do
@@ -240,14 +259,12 @@ defmodule CanOpenerTest do
 
       expect(Req, :request, fn opts ->
         assert opts[:method] == :delete
-        assert opts[:url] == "https://api.fixture.test/api/v1/widgets/{id}"
+        assert opts[:url] == "https://api.fixture.test/api/v1/widgets/42"
 
         {:ok, %Req.Response{status: 204, body: nil}}
       end)
 
-      # Function name contains special chars, so apply is required here.
-      # credo:disable-for-next-line Credo.Check.Refactor.Apply
-      assert {:ok, nil} = apply(FixtureApi, :"widgets_{id}", [client])
+      assert {:ok, nil} = FixtureApi.delete_widget(client, 42)
     end
 
     test "request options are passed to Req.request/1" do
@@ -258,7 +275,7 @@ defmodule CanOpenerTest do
         {:ok, %Req.Response{status: 200, body: %{"status" => "ok", "version" => "1.0"}}}
       end)
 
-      assert {:ok, %Schemas.StatusResponse{}} = FixtureApi.status(client)
+      assert {:ok, %Schemas.StatusResponse{}} = FixtureApi.get_status(client)
     end
 
     test "error response returns {:error, ...}" do
@@ -268,7 +285,7 @@ defmodule CanOpenerTest do
         {:ok, %Req.Response{status: 500, body: %{"error" => "boom"}}}
       end)
 
-      assert {:error, %{status: 500, body: %{"error" => "boom"}}} = FixtureApi.status(client)
+      assert {:error, %{status: 500, body: %{"error" => "boom"}}} = FixtureApi.get_status(client)
     end
 
     test "transport error passes through" do
@@ -278,7 +295,7 @@ defmodule CanOpenerTest do
         {:error, %Req.TransportError{reason: :econnrefused}}
       end)
 
-      assert {:error, %Req.TransportError{reason: :econnrefused}} = FixtureApi.status(client)
+      assert {:error, %Req.TransportError{reason: :econnrefused}} = FixtureApi.get_status(client)
     end
 
     test "no auth header when api_key is nil" do
@@ -289,7 +306,7 @@ defmodule CanOpenerTest do
         {:ok, %Req.Response{status: 200, body: %{"status" => "ok", "version" => "1.0"}}}
       end)
 
-      assert {:ok, _} = FixtureApi.status(client)
+      assert {:ok, _} = FixtureApi.get_status(client)
     end
 
     test "custom header auth sends configured header" do
@@ -302,7 +319,7 @@ defmodule CanOpenerTest do
       end)
 
       assert {:ok, %FixtureHeaderAuthApi.Schemas.StatusResponse{}} =
-               FixtureHeaderAuthApi.status(client)
+               FixtureHeaderAuthApi.get_status(client)
     end
 
     test "none auth strategy ignores api_key" do
@@ -314,7 +331,8 @@ defmodule CanOpenerTest do
         {:ok, %Req.Response{status: 200, body: %{"status" => "ok", "version" => "1.0"}}}
       end)
 
-      assert {:ok, %FixtureNoAuthApi.Schemas.StatusResponse{}} = FixtureNoAuthApi.status(client)
+      assert {:ok, %FixtureNoAuthApi.Schemas.StatusResponse{}} =
+               FixtureNoAuthApi.get_status(client)
     end
   end
 

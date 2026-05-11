@@ -50,6 +50,18 @@
       }
     },
     "/api/v1/widgets/{id}": {
+      "get": {
+        "summary": "Get widget",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/WidgetResponse" }
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "summary": "Delete widget",
         "responses": {

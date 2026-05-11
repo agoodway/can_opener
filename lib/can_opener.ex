@@ -32,8 +32,8 @@ defmodule CanOpener do
 
     * `client/1` — creates a `%CanOpener.Client{}` struct
     * Schema structs under `YourModule.Schemas.*`, each with `from_map/1`
-    * One function per OpenAPI path+method, named by stripping `path_prefix`
-      and replacing `/` with `_`
+    * One function per OpenAPI path+method, named from `operationId` when present
+      or a method-prefixed path fallback
   """
 
   @doc false
@@ -72,22 +72,37 @@ defmodule CanOpener do
     path_prefix = Module.get_attribute(env.module, :_co_path_prefix)
     schemas_mod = Module.concat(env.module, Schemas)
 
-    for {path, methods} <- spec["paths"] || %{},
-        {method, operation} <- methods do
-      generate_operation(path, method, operation, path_prefix, schemas_mod)
+    operations =
+      for {path, methods} <- spec["paths"] || %{},
+          {method, operation} <- methods do
+        generate_operation(path, method, operation, path_prefix, schemas_mod)
+      end
+
+    operations
+    |> Enum.group_by(fn {func_name, arity, _quoted} -> {func_name, arity} end)
+    |> Enum.find(fn {_key, entries} -> length(entries) > 1 end)
+    |> case do
+      nil ->
+        {:__block__, [], Enum.map(operations, fn {_func_name, _arity, quoted} -> quoted end)}
+
+      {{func_name, arity}, _entries} ->
+        raise CompileError,
+          file: env.file,
+          description: "CanOpener generated duplicate operation #{func_name}/#{arity}"
     end
   end
 
   defp generate_operation(path, method, operation, path_prefix, schemas_mod) do
-    func_name = CanOpener.Naming.from_path(path, path_prefix)
+    func_name = CanOpener.Naming.operation_name(operation, method, path, path_prefix)
     http_method = String.to_atom(method)
     doc = operation_doc(operation)
     response_module = response_module_for(operation, schemas_mod)
+    path_params = CanOpener.Naming.path_params(path)
 
     if operation["requestBody"] do
-      generate_body_operation(func_name, http_method, path, doc, response_module)
+      generate_body_operation(func_name, http_method, path, path_params, doc, response_module)
     else
-      generate_simple_operation(func_name, http_method, path, doc, response_module)
+      generate_simple_operation(func_name, http_method, path, path_params, doc, response_module)
     end
   end
 
@@ -104,34 +119,80 @@ defmodule CanOpener do
     end
   end
 
-  defp generate_body_operation(func_name, http_method, path, doc, response_module) do
-    quote do
-      @doc unquote(doc)
-      def unquote(func_name)(%CanOpener.Client{} = client, params) when is_map(params) do
-        case CanOpener.Client.request(client, unquote(http_method), unquote(path), json: params) do
-          {:ok, body} when is_map(body) ->
-            {:ok, CanOpener.decode_response(unquote(response_module), body)}
+  defp generate_body_operation(func_name, http_method, path, path_params, doc, response_module) do
+    path_vars = path_vars(path_params)
+    arity = 2 + length(path_vars)
 
-          other ->
-            other
+    quoted =
+      quote do
+        @doc unquote(doc)
+        def unquote(func_name)(%CanOpener.Client{} = client, unquote_splicing(path_vars), params)
+            when is_map(params) do
+          path =
+            CanOpener.interpolate_path(unquote(path), unquote(path_params), [
+              unquote_splicing(path_vars)
+            ])
+
+          case CanOpener.Client.request(client, unquote(http_method), path, json: params) do
+            {:ok, body} when is_map(body) ->
+              {:ok, CanOpener.decode_response(unquote(response_module), body)}
+
+            other ->
+              other
+          end
         end
       end
-    end
+
+    {func_name, arity, quoted}
   end
 
-  defp generate_simple_operation(func_name, http_method, path, doc, response_module) do
-    quote do
-      @doc unquote(doc)
-      def unquote(func_name)(%CanOpener.Client{} = client) do
-        case CanOpener.Client.request(client, unquote(http_method), unquote(path)) do
-          {:ok, body} when is_map(body) ->
-            {:ok, CanOpener.decode_response(unquote(response_module), body)}
+  defp generate_simple_operation(func_name, http_method, path, path_params, doc, response_module) do
+    path_vars = path_vars(path_params)
+    arity = 1 + length(path_vars)
 
-          other ->
-            other
+    quoted =
+      quote do
+        @doc unquote(doc)
+        def unquote(func_name)(%CanOpener.Client{} = client, unquote_splicing(path_vars)) do
+          path =
+            CanOpener.interpolate_path(unquote(path), unquote(path_params), [
+              unquote_splicing(path_vars)
+            ])
+
+          case CanOpener.Client.request(client, unquote(http_method), path) do
+            {:ok, body} when is_map(body) ->
+              {:ok, CanOpener.decode_response(unquote(response_module), body)}
+
+            other ->
+              other
+          end
         end
       end
-    end
+
+    {func_name, arity, quoted}
+  end
+
+  defp path_vars(path_params) do
+    Enum.map(path_params, fn name ->
+      name
+      |> CanOpener.Naming.param_var_name()
+      |> Macro.var(nil)
+    end)
+  end
+
+  @doc false
+  def interpolate_path(path, param_names, param_values) do
+    param_names
+    |> Enum.zip(param_values)
+    |> Enum.reduce(path, fn {name, value}, path ->
+      String.replace(path, "{#{name}}", encode_path_param(value))
+    end)
+  end
+
+  defp encode_path_param(value) do
+    value
+    |> to_string()
+    |> URI.encode(&URI.char_unreserved?/1)
   end
 
   @doc false
