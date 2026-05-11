@@ -4,11 +4,16 @@ defmodule CanOpener.Naming do
   @doc """
   Derive a function name from an OpenAPI operation.
 
-  Uses `operationId` when present. Otherwise, falls back to a method-prefixed
-  path name with path parameters normalized into regular identifier parts.
+  Uses `operationId` when present. Phoenix controller-style operation IDs like
+  `GIWeb.Api.V1.IssueController.index` are converted to resource operation names.
+  Otherwise, falls back to a method-prefixed path name with path parameters
+  normalized into regular identifier parts.
 
       iex> CanOpener.Naming.operation_name(%{"operationId" => "verifyEmail"}, "get", "/api/v1/verify/email", "/api/v1/")
       :verify_email
+
+      iex> CanOpener.Naming.operation_name(%{"operationId" => "GIWeb.Api.V1.IssueController.index"}, "get", "/api/v1/issues", "/api/v1/")
+      :list_issues
 
       iex> CanOpener.Naming.operation_name(%{}, "delete", "/api/v1/widgets/{id}", "/api/v1/")
       :delete_widget
@@ -19,9 +24,32 @@ defmodule CanOpener.Naming do
     |> case do
       nil -> fallback_name(method, path, prefix)
       "" -> fallback_name(method, path, prefix)
-      operation_id -> normalize(operation_id)
+      operation_id -> operation_id_name(operation_id)
     end
     |> String.to_atom()
+  end
+
+  defp operation_id_name(operation_id) do
+    case Regex.run(~r/(?:^|\.)([^.]+Controller)\.([^.]+)$/, operation_id) do
+      [_match, controller, action] -> controller_action_name(controller, action)
+      nil -> normalize(operation_id)
+    end
+  end
+
+  defp controller_action_name(controller, action) do
+    resource =
+      controller
+      |> String.replace_suffix("Controller", "")
+      |> normalize()
+
+    case normalize(action) do
+      "index" -> "list_#{pluralize(resource)}"
+      "create" -> "create_#{resource}"
+      "show" -> "show_#{resource}"
+      "update" -> "update_#{resource}"
+      "delete" -> "delete_#{resource}"
+      action -> "#{action}_#{resource}"
+    end
   end
 
   defp fallback_name(method, path, prefix) do
@@ -75,6 +103,14 @@ defmodule CanOpener.Naming do
 
       true ->
         name
+    end
+  end
+
+  defp pluralize(name) do
+    cond do
+      String.ends_with?(name, "y") -> String.replace_suffix(name, "y", "ies")
+      String.ends_with?(name, "s") -> name
+      true -> "#{name}s"
     end
   end
 

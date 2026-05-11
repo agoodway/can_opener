@@ -114,8 +114,12 @@ The spec is read at compile time. When the OpenAPI file changes, the module reco
 
 ## Generated Function Names
 
-CanOpener generates function names from `operationId` when present. If an operation
-does not have an `operationId`, CanOpener falls back to a method-prefixed path name by:
+CanOpener generates function names from `operationId` when present. Phoenix
+controller-style operation IDs like `GIWeb.Api.V1.IssueController.index` are
+converted to resource operation names like `list_issues/1`.
+
+If an operation does not have an `operationId`, CanOpener falls back to a
+method-prefixed path name by:
 
 - Removing the configured `path_prefix`
 - Replacing path parameters like `{id}` with regular identifier parts like `id`
@@ -132,6 +136,16 @@ For example, with `path_prefix: "/api/v1/"`:
 | `GET /api/v1/verify/email` | `get_verify_email/1` |
 | `GET /api/v1/issues/{id}` | `get_issue/2` |
 | `DELETE /api/v1/issues/{id}` | `delete_issue/2` |
+
+For Phoenix controller-style operation IDs:
+
+| OpenAPI `operationId` | Generated function |
+| --- | --- |
+| `GIWeb.Api.V1.IssueController.index` | `list_issues/1` |
+| `GIWeb.Api.V1.IssueController.create` | `create_issue/2` |
+| `GIWeb.Api.V1.IssueController.show` | `show_issue/2` |
+| `GIWeb.Api.V1.IssueController.update` | `update_issue/3` |
+| `GIWeb.Api.V1.IssueController.delete` | `delete_issue/2` |
 
 Path parameters are passed as function arguments after the client and are URI-encoded
 before CanOpener sends the request.

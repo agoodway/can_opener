@@ -18,6 +18,7 @@
     },
     "/api/v1/widgets": {
       "get": {
+        "operationId": "GIWeb.Api.V1.WidgetController.index",
         "summary": "List widgets",
         "responses": {
           "200": {
@@ -30,6 +31,7 @@
         }
       },
       "post": {
+        "operationId": "GIWeb.Api.V1.WidgetController.create",
         "summary": "Create widget",
         "requestBody": {
           "content": {
@@ -51,6 +53,7 @@
     },
     "/api/v1/widgets/{id}": {
       "get": {
+        "operationId": "GIWeb.Api.V1.WidgetController.show",
         "summary": "Get widget",
         "responses": {
           "200": {
@@ -63,6 +66,7 @@
         }
       },
       "delete": {
+        "operationId": "GIWeb.Api.V1.WidgetController.delete",
         "summary": "Delete widget",
         "responses": {
           "204": {

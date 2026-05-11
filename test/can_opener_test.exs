@@ -151,11 +151,11 @@ defmodule CanOpenerTest do
     test "all expected functions exist" do
       Code.ensure_loaded!(FixtureApi)
       assert function_exported?(FixtureApi, :get_status, 1)
-      assert function_exported?(FixtureApi, :get_widgets, 1)
-      assert function_exported?(FixtureApi, :post_widgets, 2)
+      assert function_exported?(FixtureApi, :list_widgets, 1)
+      assert function_exported?(FixtureApi, :create_widget, 2)
       assert function_exported?(FixtureApi, :get_items, 1)
       assert function_exported?(FixtureApi, :post_jobs, 2)
-      assert function_exported?(FixtureApi, :get_widget, 2)
+      assert function_exported?(FixtureApi, :show_widget, 2)
       assert function_exported?(FixtureApi, :delete_widget, 2)
     end
 
@@ -194,7 +194,7 @@ defmodule CanOpenerTest do
          }}
       end)
 
-      assert {:ok, result} = FixtureApi.post_widgets(client, %{name: "Gear", color: "blue"})
+      assert {:ok, result} = FixtureApi.create_widget(client, %{name: "Gear", color: "blue"})
       assert %Schemas.WidgetResponse{id: 42, name: "Gear"} = result
       assert %Schemas.Metadata{created_at: "2025-06-01"} = result.metadata
     end
@@ -217,7 +217,7 @@ defmodule CanOpenerTest do
       end)
 
       assert {:ok, %Schemas.WidgetList{total: 1, items: [%Schemas.WidgetResponse{id: 42}]}} =
-               FixtureApi.get_widgets(client)
+               FixtureApi.list_widgets(client)
     end
 
     test "201 response with non-200 schema currently returns raw map" do
@@ -251,7 +251,7 @@ defmodule CanOpenerTest do
       end)
 
       assert {:ok, %Schemas.WidgetResponse{id: 42, name: "Gear"}} =
-               FixtureApi.get_widget(client, "id with/slash")
+               FixtureApi.show_widget(client, "id with/slash")
     end
 
     test "204 response without schema returns raw body" do
